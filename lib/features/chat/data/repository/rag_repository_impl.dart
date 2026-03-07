@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../domain/model/document_model.dart';
 import '../../domain/repository/rag_repository.dart';
 
@@ -13,8 +14,17 @@ class RagRepositoryImpl implements RagRepository {
   Future<String> retrieveContext(String query) async {
     if (_documents.isEmpty) return "";
 
-    // Simple keyword-based retrieval for browser offline MVP
-    // We search all chunks and return the top 3 most relevant ones
+    // Offload heavy text processing to an isolate to keep the UI thread smooth
+    return await compute(_retrieveContextIsolate, {
+      'query': query,
+      'documents': _documents,
+    });
+  }
+
+  static String _retrieveContextIsolate(Map<String, dynamic> params) {
+    final String query = params['query'];
+    final List<DocumentModel> documents = params['documents'];
+
     final queryWords = query
         .toLowerCase()
         .split(' ')
@@ -24,7 +34,7 @@ class RagRepositoryImpl implements RagRepository {
 
     List<MapEntry<DocumentChunk, int>> scores = [];
 
-    for (var doc in _documents) {
+    for (var doc in documents) {
       for (var chunk in doc.chunks) {
         int score = 0;
         final chunkText = chunk.text.toLowerCase();

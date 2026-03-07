@@ -92,7 +92,12 @@ class _ChatPageState extends State<ChatPage> {
                       final msg = messages[index];
                       return FadeInUp(
                         duration: const Duration(milliseconds: 300),
-                        child: _ChatBubble(message: msg.text, isAi: msg.isAi),
+                        child: _ChatBubble(
+                          message: msg.text,
+                          isAi: msg.isAi,
+                          timeTaken: msg.timeTaken,
+                          tokenCount: msg.tokenCount,
+                        ),
                       );
                     },
                   ),
@@ -191,11 +196,15 @@ class _ChatBubble extends StatelessWidget {
   final String message;
   final bool isAi;
   final bool isTyping;
+  final Duration? timeTaken;
+  final int? tokenCount;
 
   const _ChatBubble({
     required this.message,
     required this.isAi,
     this.isTyping = false,
+    this.timeTaken,
+    this.tokenCount,
   });
 
   @override
@@ -230,30 +239,90 @@ class _ChatBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
-        child: isTyping
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppTheme.neonCyan,
-                ),
-              )
-            : isAi
-            ? MarkdownBody(
-                data: message,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(color: Colors.white, fontSize: 15),
-                  strong: const TextStyle(
-                    color: AppTheme.neonCyan,
-                    fontWeight: FontWeight.bold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            isTyping
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppTheme.neonCyan,
+                    ),
+                  )
+                : isAi
+                ? MarkdownBody(
+                    data: message,
+                    styleSheet: MarkdownStyleSheet(
+                      p: const TextStyle(color: Colors.white, fontSize: 15),
+                      strong: const TextStyle(
+                        color: AppTheme.neonCyan,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                : Text(
+                    message,
+                    style: const TextStyle(color: Colors.white, fontSize: 15),
                   ),
+            if (isAi && !isTyping && (timeTaken != null || tokenCount != null))
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (timeTaken != null)
+                      _MetricTag(
+                        icon: Icons.timer_outlined,
+                        label:
+                            '${(timeTaken!.inMilliseconds / 1000).toStringAsFixed(1)}s',
+                      ),
+                    if (timeTaken != null && tokenCount != null)
+                      const SizedBox(width: 8),
+                    if (tokenCount != null)
+                      _MetricTag(
+                        icon: Icons.token_outlined,
+                        label: '$tokenCount tokens',
+                      ),
+                  ],
                 ),
-              )
-            : Text(
-                message,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricTag extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetricTag({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: AppTheme.neonCyan.withOpacity(0.7)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 9,
+              color: Colors.white.withOpacity(0.5),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

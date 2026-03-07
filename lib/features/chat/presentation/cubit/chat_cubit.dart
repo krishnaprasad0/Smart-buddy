@@ -23,7 +23,7 @@ class ChatCubit extends Cubit<ChatState> {
     _messages.add(
       ChatMessage(
         text:
-            "Upload a document and ask me anything about it. I work fully offline!",
+            "Hello! I am **Smart Buddy**, your offline AI assistant. Upload a document and ask me anything about it!",
         isAi: true,
         timestamp: DateTime.now(),
       ),
@@ -73,14 +73,18 @@ class ChatCubit extends Cubit<ChatState> {
       // 1. Retrieve context from RAG Repository
       final context = await ragRepository.retrieveContext(text);
 
-      // 2. Construct Augmented Prompt
-      String augmentedPrompt = text;
+      // 2. Construct Augmented Prompt with Identity
+      String systemPrompt =
+          "You are Smart Buddy, a helpful offline AI assistant.";
+      String augmentedPrompt = "$systemPrompt\n\nUser Question: $text";
+
       if (context.isNotEmpty) {
         augmentedPrompt =
-            "Context:\n$context\n\nQuestion: $text\n\nAnswer the question based on the context provided above.";
+            "$systemPrompt\n\nContext:\n$context\n\nQuestion: $text\n\nAnswer the question based on the context provided above.";
       }
 
       // 3. Call AI Service
+      final stopwatch = Stopwatch()..start();
       final aiStream = aiService.promptStream(augmentedPrompt);
 
       String currentAiResponse = "";
@@ -112,8 +116,22 @@ class ChatCubit extends Cubit<ChatState> {
         );
       }
 
+      stopwatch.stop();
+
       print(
         "ChatCubit: AI stream completed. Total response length: ${currentAiResponse.length}",
+      );
+
+      // Final update with metrics
+      // Rough estimation: 1 token approx 4 chars
+      final tokenCount = (currentAiResponse.length / 4).round();
+
+      _messages[_messages.length - 1] = ChatMessage(
+        text: currentAiResponse,
+        isAi: true,
+        timestamp: aiMsgTimestamp,
+        timeTaken: stopwatch.elapsed,
+        tokenCount: tokenCount,
       );
 
       emit(

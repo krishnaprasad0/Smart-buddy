@@ -34,13 +34,17 @@ class ChatMessage extends Equatable {
   final String text;
   final bool isAi;
   final DateTime timestamp;
+  final Duration? timeTaken;
+  final int? tokenCount;
 
   const ChatMessage({
     required this.text,
     required this.isAi,
     required this.timestamp,
+    this.timeTaken,
+    this.tokenCount,
   });
 
   @override
-  List<Object?> get props => [text, isAi, timestamp];
+  List<Object?> get props => [text, isAi, timestamp, timeTaken, tokenCount];
 }

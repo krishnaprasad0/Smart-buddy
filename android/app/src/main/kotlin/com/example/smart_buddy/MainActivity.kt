@@ -25,7 +25,7 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "initialize" -> {
                     val modelPath = call.argument<String>("modelPath")
-                    Log.i(TAG, "Initializing MediaPipe LLM (Main Thread). Path: $modelPath")
+                    Log.i(TAG, "Initializing MediaPipe LLM. Path: $modelPath")
                     
                     if (modelPath != null) {
                         val file = File(modelPath)
@@ -35,19 +35,21 @@ class MainActivity : FlutterActivity() {
                             return@setMethodCallHandler
                         }
 
-                        try {
-                            val options = LlmInference.LlmInferenceOptions.builder()
-                                .setModelPath(modelPath)
-                                .setMaxTokens(4096)
-                                .setPreferredBackend(LlmInference.Backend.GPU)
-                                .build()
-                            llmInference = LlmInference.createFromOptions(context, options)
-                            Log.i(TAG, "LlmInference: Init Success (GPU Enabled)")
-                            result.success(true)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "LlmInference: Init Failed: ${e.message}")
-                            result.error("INIT_FAILED", e.message, null)
-                        }
+                        Thread {
+                            try {
+                                val options = LlmInference.LlmInferenceOptions.builder()
+                                    .setModelPath(modelPath)
+                                    .setMaxTokens(4096)
+                                    .setPreferredBackend(LlmInference.Backend.GPU)
+                                    .build()
+                                llmInference = LlmInference.createFromOptions(context, options)
+                                Log.i(TAG, "LlmInference: Init Success (GPU Enabled)")
+                                runOnUiThread { result.success(true) }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "LlmInference: Init Failed: ${e.message}")
+                                runOnUiThread { result.error("INIT_FAILED", e.message, null) }
+                            }
+                        }.start()
                     } else {
                         result.error("INVALID_ARGUMENT", "Model path is null", null)
                     }
