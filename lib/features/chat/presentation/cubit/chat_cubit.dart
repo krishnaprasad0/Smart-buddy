@@ -75,7 +75,7 @@ class ChatCubit extends Cubit<ChatState> {
 
       // 2. Construct Augmented Prompt with Identity
       String systemPrompt =
-          "You are Smart Buddy, a helpful offline AI assistant.";
+          "You are Smart Buddy, a helpful offline AI assistant. Keep your responses concise and short by default. If the user explicitly asks for a detailed explanation or more information, then provide a comprehensive response.";
       String augmentedPrompt = "$systemPrompt\n\nUser Question: $text";
 
       if (context.isNotEmpty) {
