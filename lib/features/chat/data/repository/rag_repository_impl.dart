@@ -14,16 +14,26 @@ class RagRepositoryImpl implements RagRepository {
   Future<String> retrieveContext(String query) async {
     if (_documents.isEmpty) return "";
 
+    // 1. Flatten all chunks from all documents into a simple list of strings.
+    // This avoids copying full DocumentModel objects (with metadata and full content)
+    // across isolate boundaries, which is likely causing the UI freeze.
+    final List<String> allChunkTexts = _documents
+        .expand((doc) => doc.chunks)
+        .map((chunk) => chunk.text)
+        .toList();
+
+    if (allChunkTexts.isEmpty) return "";
+
     // Offload heavy text processing to an isolate to keep the UI thread smooth
     return await compute(_retrieveContextIsolate, {
       'query': query,
-      'documents': _documents,
+      'chunks': allChunkTexts,
     });
   }
 
   static String _retrieveContextIsolate(Map<String, dynamic> params) {
     final String query = params['query'];
-    final List<DocumentModel> documents = params['documents'];
+    final List<String> chunks = params['chunks'];
 
     final queryWords = query
         .toLowerCase()
@@ -32,26 +42,26 @@ class RagRepositoryImpl implements RagRepository {
         .toList();
     if (queryWords.isEmpty) return "";
 
-    List<MapEntry<DocumentChunk, int>> scores = [];
+    // List of pairs: [chunkText, score]
+    List<MapEntry<String, int>> scores = [];
 
-    for (var doc in documents) {
-      for (var chunk in doc.chunks) {
-        int score = 0;
-        final chunkText = chunk.text.toLowerCase();
-        for (var word in queryWords) {
-          if (chunkText.contains(word)) score++;
-        }
-        if (score > 0) {
-          scores.add(MapEntry(chunk, score));
-        }
+    for (var chunkText in chunks) {
+      int score = 0;
+      final lowercaseChunk = chunkText.toLowerCase();
+      for (var word in queryWords) {
+        if (lowercaseChunk.contains(word)) score++;
+      }
+      if (score > 0) {
+        scores.add(MapEntry(chunkText, score));
       }
     }
 
+    if (scores.isEmpty) return "";
+
+    // Sort by score descending
     scores.sort((a, b) => b.value.compareTo(a.value));
 
-    final topChunks = scores.take(3).map((e) => e.key.text).toList();
-
-    if (topChunks.isEmpty) return "";
+    final topChunks = scores.take(3).map((e) => e.key).toList();
 
     return "Relevant context from documents:\n${topChunks.join("\n---\n")}";
   }
