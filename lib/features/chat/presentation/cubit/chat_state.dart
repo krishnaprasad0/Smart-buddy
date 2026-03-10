@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../domain/model/chat_session.dart';
 
 abstract class ChatState extends Equatable {
   const ChatState();
@@ -14,11 +15,37 @@ class ChatLoading extends ChatState {}
 class ChatMessageReceived extends ChatState {
   final List<ChatMessage> messages;
   final bool isTyping;
+  final String? currentSessionId;
+  final List<ChatSession> allSessions;
 
-  const ChatMessageReceived({required this.messages, this.isTyping = false});
+  const ChatMessageReceived({
+    required this.messages,
+    this.isTyping = false,
+    this.currentSessionId,
+    this.allSessions = const [],
+  });
 
   @override
-  List<Object?> get props => [messages, isTyping];
+  List<Object?> get props => [
+    messages,
+    isTyping,
+    currentSessionId,
+    allSessions,
+  ];
+
+  ChatMessageReceived copyWith({
+    List<ChatMessage>? messages,
+    bool? isTyping,
+    String? currentSessionId,
+    List<ChatSession>? allSessions,
+  }) {
+    return ChatMessageReceived(
+      messages: messages ?? this.messages,
+      isTyping: isTyping ?? this.isTyping,
+      currentSessionId: currentSessionId ?? this.currentSessionId,
+      allSessions: allSessions ?? this.allSessions,
+    );
+  }
 }
 
 class ChatError extends ChatState {

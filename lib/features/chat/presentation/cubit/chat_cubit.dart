@@ -1,8 +1,11 @@
 import 'dart:developer';
 
+import 'package:uuid/uuid.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'chat_state.dart';
 import '../../../../core/services/ai_service.dart';
+import '../../../../core/services/database_service.dart';
+import '../../domain/model/chat_session.dart';
 import '../../domain/repository/rag_repository.dart';
 import '../../data/source/local_document_source.dart';
 
@@ -10,27 +13,72 @@ class ChatCubit extends Cubit<ChatState> {
   final AiService aiService;
   final RagRepository ragRepository;
   final LocalDocumentSource documentSource;
+  final DatabaseService dbService; // Added
+  final _uuid = const Uuid(); // Added
 
+  String? _currentSessionId; // Added
+  List<ChatSession> _allSessions = []; // Added
+
+  // The _messages list is now managed by the database for sessions,
+  // but still used by uploadDocument for temporary messages.
+  // This might need refactoring if uploadDocument should also save to DB.
   final List<ChatMessage> _messages = [];
 
   ChatCubit({
     required this.aiService,
     required this.ragRepository,
     required this.documentSource,
+    required this.dbService, // Added
   }) : super(ChatInitial()) {
-    _addInitialMessage();
+    // _addInitialMessage(); // Removed, replaced by session loading
+    loadSessions(); // Added
   }
 
-  void _addInitialMessage() {
-    _messages.add(
-      ChatMessage(
-        text:
-            "Hello! I am **Smart Buddy**, your offline AI assistant. Upload a document and ask me anything about it!",
-        isAi: true,
-        timestamp: DateTime.now(),
+  // Removed _addInitialMessage as session handling now dictates initial state
+
+  Future<void> loadSessions() async {
+    _allSessions = await dbService.getSessions();
+    if (_allSessions.isEmpty) {
+      await createNewChat();
+    } else {
+      await loadChatSession(_allSessions.first.id);
+    }
+  }
+
+  Future<void> createNewChat() async {
+    final sessionId = _uuid.v4();
+    final newSession = ChatSession(
+      id: sessionId,
+      title: "New Chat ${DateTime.now().hour}:${DateTime.now().minute}",
+      createdAt: DateTime.now(),
+    );
+    await dbService.saveSession(newSession);
+    _allSessions = await dbService.getSessions();
+    _currentSessionId = sessionId;
+    emit(
+      ChatMessageReceived(
+        messages: const [],
+        currentSessionId: _currentSessionId,
+        allSessions: _allSessions,
       ),
     );
-    emit(ChatMessageReceived(messages: List.from(_messages)));
+  }
+
+  Future<void> loadChatSession(String sessionId) async {
+    final messages = await dbService.getMessages(sessionId);
+    _currentSessionId = sessionId;
+    emit(
+      ChatMessageReceived(
+        messages: messages,
+        currentSessionId: _currentSessionId,
+        allSessions: _allSessions,
+      ),
+    );
+  }
+
+  Future<void> deleteSession(String sessionId) async {
+    await dbService.deleteSession(sessionId);
+    await loadSessions();
   }
 
   Future<void> uploadDocument() async {
@@ -38,6 +86,8 @@ class ChatCubit extends Cubit<ChatState> {
       final document = await documentSource.pickAndParseDocument();
       if (document != null) {
         await ragRepository.indexDocument(document);
+        // This message is currently not saved to DB, only to _messages list.
+        // This might need refactoring to align with session-based message storage.
         _messages.add(
           ChatMessage(
             text:
@@ -46,6 +96,8 @@ class ChatCubit extends Cubit<ChatState> {
             timestamp: DateTime.now(),
           ),
         );
+        // Emitting the temporary _messages list, not the session messages.
+        // This is a potential inconsistency that might need addressing.
         emit(ChatMessageReceived(messages: List.from(_messages)));
       }
     } catch (e) {
@@ -57,13 +109,40 @@ class ChatCubit extends Cubit<ChatState> {
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
+    if (_currentSessionId == null) {
+      await createNewChat();
+    }
+
     final userMessage = ChatMessage(
       text: text,
       isAi: false,
       timestamp: DateTime.now(),
     );
-    _messages.add(userMessage);
-    emit(ChatMessageReceived(messages: List.from(_messages), isTyping: true));
+
+    final currentMessages = state is ChatMessageReceived
+        ? (state as ChatMessageReceived).messages
+        : <ChatMessage>[];
+
+    // If this is the first message in the session, update the title
+    if (currentMessages.isEmpty && _currentSessionId != null) {
+      final title = text.length > 30 ? "${text.substring(0, 27)}..." : text;
+      await dbService.updateSessionTitle(_currentSessionId!, title);
+      _allSessions = await dbService.getSessions();
+    }
+
+    final updatedMessages = List<ChatMessage>.from(currentMessages)
+      ..add(userMessage);
+
+    await dbService.saveMessage(_currentSessionId!, userMessage);
+
+    emit(
+      ChatMessageReceived(
+        messages: updatedMessages,
+        isTyping: true,
+        currentSessionId: _currentSessionId,
+        allSessions: _allSessions,
+      ),
+    );
 
     try {
       // 0. Check if AI Service is available (initialized)
@@ -75,7 +154,12 @@ class ChatCubit extends Cubit<ChatState> {
           ),
         );
         emit(
-          ChatMessageReceived(messages: List.from(_messages), isTyping: false),
+          ChatMessageReceived(
+            messages: updatedMessages, // Use updatedMessages here
+            isTyping: false,
+            currentSessionId: _currentSessionId,
+            allSessions: _allSessions,
+          ),
         );
         return;
       }
@@ -103,37 +187,50 @@ class ChatCubit extends Cubit<ChatState> {
       String currentAiResponse = "";
       final aiMsgTimestamp = DateTime.now();
 
-      // Add an initial empty message for the AI
-      _messages.add(
-        ChatMessage(text: "", isAi: true, timestamp: aiMsgTimestamp),
+      // Add an initial empty message for the AI to the UI state
+      final aiPlaceholderMessage = ChatMessage(
+        text: "",
+        isAi: true,
+        timestamp: aiMsgTimestamp,
+      );
+      List<ChatMessage> messagesWithAiPlaceholder = List.from(updatedMessages)
+        ..add(aiPlaceholderMessage);
+
+      emit(
+        ChatMessageReceived(
+          messages: messagesWithAiPlaceholder,
+          isTyping: true,
+          currentSessionId: _currentSessionId,
+          allSessions: _allSessions,
+        ),
       );
 
       await for (final chunk in aiStream) {
-        // MediaPipe 0.10.29 generateResponseAsync sends DELTAS (not cumulative)
         currentAiResponse += chunk;
 
-        // Update the last message (the one we just added) with the new text
-        _messages[_messages.length - 1] = ChatMessage(
+        // Update the last message (the AI placeholder) with the new text
+        messagesWithAiPlaceholder[messagesWithAiPlaceholder.length -
+            1] = ChatMessage(
           text: currentAiResponse,
           isAi: true,
           timestamp: aiMsgTimestamp,
         );
 
-        // Hide typing indicator once we have content
         emit(
           ChatMessageReceived(
-            messages: List.from(_messages),
+            messages: List.from(messagesWithAiPlaceholder), // Emit a copy
             isTyping: currentAiResponse.isEmpty,
+            currentSessionId: _currentSessionId,
+            allSessions: _allSessions,
           ),
         );
       }
 
       stopwatch.stop();
       // Final update with metrics
-      // Rough estimation: 1 token approx 4 chars
       final tokenCount = (currentAiResponse.length / 4).round();
 
-      _messages[_messages.length - 1] = ChatMessage(
+      final aiMessage = ChatMessage(
         text: currentAiResponse,
         isAi: true,
         timestamp: aiMsgTimestamp,
@@ -141,21 +238,38 @@ class ChatCubit extends Cubit<ChatState> {
         tokenCount: tokenCount,
       );
 
+      await dbService.saveMessage(_currentSessionId!, aiMessage);
+
+      final finalMessages = List<ChatMessage>.from(updatedMessages)
+        ..add(aiMessage);
+
       emit(
-        ChatMessageReceived(messages: List.from(_messages), isTyping: false),
+        ChatMessageReceived(
+          messages: finalMessages,
+          isTyping: false,
+          currentSessionId: _currentSessionId,
+          allSessions: _allSessions,
+        ),
       );
     } catch (e) {
       log("ChatCubit: Catching AI Error: $e");
       await aiService.reset();
       emit(ChatError("AI Error: $e"));
       emit(
-        ChatMessageReceived(messages: List.from(_messages), isTyping: false),
+        ChatMessageReceived(
+          messages: updatedMessages, // Use updatedMessages here
+          isTyping: false,
+          currentSessionId: _currentSessionId,
+          allSessions: _allSessions,
+        ),
       );
     }
   }
 
   void clearChat() {
-    _messages.clear();
-    _addInitialMessage();
+    if (_currentSessionId != null) {
+      dbService.deleteSession(_currentSessionId!);
+      createNewChat();
+    }
   }
 }

@@ -9,6 +9,7 @@ import 'core/services/ai_service.dart';
 import 'core/services/local_storage_service.dart';
 import 'features/chat/data/repository/rag_repository_impl.dart';
 import 'features/chat/data/source/local_document_source.dart';
+import 'core/services/database_service.dart';
 
 void main() {
   runApp(const SmartBuddyApp());
@@ -24,6 +25,7 @@ class SmartBuddyApp extends StatelessWidget {
     final storageService = LocalStorageService();
     final ragRepository = RagRepositoryImpl();
     final documentSource = LocalDocumentSource();
+    final databaseService = DatabaseService();
 
     return MultiBlocProvider(
       providers: [
@@ -37,6 +39,7 @@ class SmartBuddyApp extends StatelessWidget {
             aiService: aiService,
             ragRepository: ragRepository,
             documentSource: documentSource,
+            dbService: databaseService,
           ),
         ),
       ],
