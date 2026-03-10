@@ -110,6 +110,16 @@ class KnowledgeBaseBottomSheet extends StatelessWidget {
                                     fontSize: 12,
                                   ),
                                 ),
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.white24,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => context
+                                      .read<ChatCubit>()
+                                      .deleteDocument(doc.id),
+                                ),
                               ),
                             ),
                           );

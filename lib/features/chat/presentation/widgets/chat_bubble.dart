@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/services/voice_service.dart';
 
 class ChatBubble extends StatelessWidget {
   final String message;
@@ -103,6 +104,30 @@ class ChatBubble extends StatelessWidget {
                                 icon: Icons.token_outlined,
                                 label: '$tokenCount tokens',
                               ),
+                            const SizedBox(width: 8),
+                            ValueListenableBuilder<String?>(
+                              valueListenable:
+                                  VoiceService().currentPlayingText,
+                              builder: (context, playingText, _) {
+                                final isPlaying = playingText == message;
+                                return IconButton(
+                                  iconSize: 14,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: Icon(
+                                    isPlaying
+                                        ? Icons.stop_circle_rounded
+                                        : Icons.volume_up_rounded,
+                                    color: isPlaying
+                                        ? Colors.redAccent
+                                        : AppTheme.buddyTeal,
+                                  ),
+                                  onPressed: () =>
+                                      VoiceService().speak(message),
+                                  tooltip: isPlaying ? 'Stop' : 'Read aloud',
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),

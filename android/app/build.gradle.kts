@@ -13,6 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -46,4 +47,5 @@ flutter {
 dependencies {
     implementation("com.google.mediapipe:tasks-genai:0.10.29")
     implementation("com.google.mediapipe:tasks-core:0.10.29")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 }

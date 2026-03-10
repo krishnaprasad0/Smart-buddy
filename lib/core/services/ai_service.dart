@@ -5,8 +5,9 @@ import 'local_storage_service.dart';
 abstract class AiService {
   Future<bool> isModelAvailable();
   Future<void> initialize();
-  Future<void> reset();
   Stream<String> promptStream(String prompt);
+  Future<String> prompt(String prompt);
+  Future<void> reset();
 }
 
 class AndroidAiService implements AiService {
@@ -52,6 +53,20 @@ class AndroidAiService implements AiService {
       print("Error initializing AI Service: $e");
       rethrow;
     }
+  }
+
+  @override
+  Future<String> prompt(String prompt) async {
+    final completer = Completer<String>();
+    String totalResponse = "";
+
+    promptStream(prompt).listen(
+      (chunk) => totalResponse += chunk,
+      onError: (e) => completer.completeError(e),
+      onDone: () => completer.complete(totalResponse),
+    );
+
+    return completer.future;
   }
 
   @override

@@ -4,18 +4,42 @@ import '../../../../core/theme/app_theme.dart';
 import '../cubit/chat_cubit.dart';
 import '../cubit/chat_state.dart';
 import 'knowledge_base_bottom_sheet.dart';
+import '../../../../core/services/voice_service.dart';
 
-class ChatInput extends StatelessWidget {
-  final TextEditingController _controller = TextEditingController();
+class ChatInput extends StatefulWidget {
   final VoidCallback? onSend;
 
-  ChatInput({super.key, this.onSend});
+  const ChatInput({super.key, this.onSend});
+
+  @override
+  State<ChatInput> createState() => _ChatInputState();
+}
+
+class _ChatInputState extends State<ChatInput> {
+  final TextEditingController _controller = TextEditingController();
+  bool _isListening = false;
 
   void _handleSend(BuildContext context) {
     if (_controller.text.isNotEmpty) {
       context.read<ChatCubit>().sendMessage(_controller.text);
       _controller.clear();
-      onSend?.call();
+      widget.onSend?.call();
+    }
+  }
+
+  void _toggleListening() async {
+    final voiceService = VoiceService();
+    if (_isListening) {
+      await voiceService.stopListening();
+      setState(() => _isListening = false);
+    } else {
+      setState(() => _isListening = true);
+      await voiceService.startListening((text) {
+        setState(() {
+          _controller.text = text;
+          _isListening = false;
+        });
+      });
     }
   }
 
@@ -73,6 +97,15 @@ class ChatInput extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 12,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isListening
+                            ? Icons.stop_circle_rounded
+                            : Icons.mic_none_rounded,
+                        color: _isListening ? Colors.redAccent : Colors.white30,
+                      ),
+                      onPressed: isGenerating ? null : _toggleListening,
                     ),
                   ),
                 ),

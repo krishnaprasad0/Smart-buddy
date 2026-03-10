@@ -11,6 +11,11 @@ class RagRepositoryImpl implements RagRepository {
   }
 
   @override
+  Future<void> clearDocuments() async {
+    _documents.clear();
+  }
+
+  @override
   Future<String> retrieveContext(String query) async {
     if (_documents.isEmpty) return "";
 

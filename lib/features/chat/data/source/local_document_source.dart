@@ -2,10 +2,22 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../domain/model/document_model.dart';
 import 'package:uuid/uuid.dart';
 
 class LocalDocumentSource {
+  Future<File?> _saveToPermanentStorage(String sourcePath, String name) async {
+    final directory = await getApplicationDocumentsDirectory();
+    final kbDir = Directory('${directory.path}/knowledge_base');
+    if (!await kbDir.exists()) {
+      await kbDir.create(recursive: true);
+    }
+
+    final destinationPath = '${kbDir.path}/${const Uuid().v4()}_$name';
+    return await File(sourcePath).copy(destinationPath);
+  }
+
   Future<DocumentModel?> pickAndParseDocument() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -13,11 +25,15 @@ class LocalDocumentSource {
     );
 
     if (result != null && result.files.single.path != null) {
-      final path = result.files.single.path!;
+      final sourcePath = result.files.single.path!;
       final name = result.files.single.name;
 
-      final String content = await _extractTextFromPdfPath(path);
-      final chunks = _chunkText(content);
+      // Save to permanent storage
+      final permanentFile = await _saveToPermanentStorage(sourcePath, name);
+      if (permanentFile == null) return null;
+
+      final String content = await _extractTextFromPdfPath(permanentFile.path);
+      final chunks = chunkText(content);
 
       return DocumentModel(
         id: const Uuid().v4(),
@@ -42,7 +58,7 @@ class LocalDocumentSource {
     }
   }
 
-  List<DocumentChunk> _chunkText(String text, {int chunkSize = 1000}) {
+  List<DocumentChunk> chunkText(String text, {int chunkSize = 1000}) {
     List<DocumentChunk> chunks = [];
     int index = 0;
 

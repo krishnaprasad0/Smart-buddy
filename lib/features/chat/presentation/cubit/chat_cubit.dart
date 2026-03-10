@@ -7,6 +7,7 @@ import 'chat_state.dart';
 import '../../../../core/services/ai_service.dart';
 import '../../../../core/services/database_service.dart';
 import '../../domain/model/chat_session.dart';
+import '../../domain/model/document_model.dart';
 import '../../domain/repository/rag_repository.dart';
 import '../../data/source/local_document_source.dart';
 
@@ -20,10 +21,6 @@ class ChatCubit extends Cubit<ChatState> {
   String? _currentSessionId; // Added
   List<ChatSession> _allSessions = []; // Added
 
-  // The _messages list is now managed by the database for sessions,
-  // but still used by uploadDocument for temporary messages.
-  // This might need refactoring if uploadDocument should also save to DB.
-  final List<ChatMessage> _messages = [];
   StreamSubscription<String>? _aiSubscription;
 
   ChatCubit({
@@ -33,7 +30,12 @@ class ChatCubit extends Cubit<ChatState> {
     required this.dbService, // Added
   }) : super(ChatInitial()) {
     // _addInitialMessage(); // Removed, replaced by session loading
-    loadSessions(); // Added
+    _init();
+  }
+
+  Future<void> _init() async {
+    await loadSessions();
+    await loadKnowledgeBase();
   }
 
   // Removed _addInitialMessage as session handling now dictates initial state
@@ -83,28 +85,72 @@ class ChatCubit extends Cubit<ChatState> {
     await loadSessions();
   }
 
+  Future<void> loadKnowledgeBase() async {
+    try {
+      final docMaps = await dbService.getDocuments();
+      await ragRepository.clearDocuments();
+
+      for (var map in docMaps) {
+        final content = map['content'] as String;
+        // Re-chunk on load for simplicity
+        final chunks = documentSource.chunkText(content);
+        final doc = DocumentModel(
+          id: map['id'],
+          name: map['name'],
+          content: content,
+          chunks: chunks,
+        );
+        await ragRepository.indexDocument(doc);
+      }
+
+      // Emit current state to refresh UI if needed
+      if (state is ChatMessageReceived) {
+        emit((state as ChatMessageReceived).copyWith());
+      }
+    } catch (e) {
+      log("Error loading KB: $e");
+    }
+  }
+
   Future<void> uploadDocument() async {
     try {
       final document = await documentSource.pickAndParseDocument();
       if (document != null) {
+        // 1. Save to DB
+        await dbService.saveDocument(document.toMap());
+
+        // 2. Index in memory
         await ragRepository.indexDocument(document);
-        // This message is currently not saved to DB, only to _messages list.
-        // This might need refactoring to align with session-based message storage.
-        _messages.add(
-          ChatMessage(
-            text:
-                "Successfully indexed `${document.name}`. I can now answer questions based on its content!",
-            isAi: true,
-            timestamp: DateTime.now(),
-          ),
+
+        final statusMsg = ChatMessage(
+          text:
+              "Successfully indexed `${document.name}`. I can now answer questions based on its content!",
+          isAi: true,
+          timestamp: DateTime.now(),
         );
-        // Emitting the temporary _messages list, not the session messages.
-        // This is a potential inconsistency that might need addressing.
-        emit(ChatMessageReceived(messages: List.from(_messages)));
+
+        if (state is ChatMessageReceived) {
+          final s = state as ChatMessageReceived;
+          final updated = List<ChatMessage>.from(s.messages)..add(statusMsg);
+          emit(s.copyWith(messages: updated));
+        }
+
+        // Save status message to current session if it exists
+        if (_currentSessionId != null) {
+          await dbService.saveMessage(_currentSessionId!, statusMsg);
+        }
       }
     } catch (e) {
       emit(ChatError("Failed to upload document: $e"));
-      emit(ChatMessageReceived(messages: List.from(_messages)));
+    }
+  }
+
+  Future<void> deleteDocument(String id) async {
+    try {
+      await dbService.deleteDocument(id);
+      await loadKnowledgeBase();
+    } catch (e) {
+      log("Error deleting document: $e");
     }
   }
 

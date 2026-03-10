@@ -3,6 +3,7 @@ import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../features/chat/domain/model/chat_session.dart';
 import '../../features/chat/presentation/cubit/chat_state.dart';
+import '../../features/productivity/domain/model/todo_model.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -17,7 +18,24 @@ class DatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'smart_buddy.db');
 
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 4,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createTodosTable(db);
+    }
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE todos ADD COLUMN reminderMessage TEXT');
+    }
+    if (oldVersion < 4) {
+      await _createDocumentsTable(db);
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -39,6 +57,34 @@ class DatabaseService {
         timeTakenMs INTEGER,
         tokenCount INTEGER,
         FOREIGN KEY (sessionId) REFERENCES sessions (id) ON DELETE CASCADE
+      )
+    ''');
+
+    await _createTodosTable(db);
+    await _createDocumentsTable(db);
+  }
+
+  Future<void> _createDocumentsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE documents (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        localPath TEXT,
+        content TEXT,
+        createdAt TEXT
+      )
+    ''');
+  }
+
+  Future<void> _createTodosTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE todos (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        reminderMessage TEXT,
+        dueDate TEXT,
+        priority TEXT,
+        isCompleted INTEGER
       )
     ''');
   }
@@ -117,5 +163,60 @@ class DatabaseService {
     final db = await database;
     await db.delete('sessions');
     await db.delete('messages');
+    await db.delete('todos');
+  }
+
+  // Todo Operations
+  Future<void> saveTodo(TodoModel todo) async {
+    final db = await database;
+    await db.insert(
+      'todos',
+      todo.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<TodoModel>> getTodos() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'todos',
+      orderBy: 'isCompleted ASC, dueDate ASC',
+    );
+    return List.generate(maps.length, (i) => TodoModel.fromMap(maps[i]));
+  }
+
+  Future<void> deleteTodo(String id) async {
+    final db = await database;
+    await db.delete('todos', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateTodoStatus(String id, bool isCompleted) async {
+    final db = await database;
+    await db.update(
+      'todos',
+      {'isCompleted': isCompleted ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  // Document Operations
+  Future<void> saveDocument(Map<String, dynamic> docMap) async {
+    final db = await database;
+    await db.insert(
+      'documents',
+      docMap,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getDocuments() async {
+    final db = await database;
+    return await db.query('documents', orderBy: 'createdAt DESC');
+  }
+
+  Future<void> deleteDocument(String id) async {
+    final db = await database;
+    await db.delete('documents', where: 'id = ?', whereArgs: [id]);
   }
 }
