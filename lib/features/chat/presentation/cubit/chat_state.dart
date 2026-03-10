@@ -15,12 +15,14 @@ class ChatLoading extends ChatState {}
 class ChatMessageReceived extends ChatState {
   final List<ChatMessage> messages;
   final bool isTyping;
+  final bool isGenerating;
   final String? currentSessionId;
   final List<ChatSession> allSessions;
 
   const ChatMessageReceived({
     required this.messages,
     this.isTyping = false,
+    this.isGenerating = false,
     this.currentSessionId,
     this.allSessions = const [],
   });
@@ -29,6 +31,7 @@ class ChatMessageReceived extends ChatState {
   List<Object?> get props => [
     messages,
     isTyping,
+    isGenerating,
     currentSessionId,
     allSessions,
   ];
@@ -36,12 +39,14 @@ class ChatMessageReceived extends ChatState {
   ChatMessageReceived copyWith({
     List<ChatMessage>? messages,
     bool? isTyping,
+    bool? isGenerating,
     String? currentSessionId,
     List<ChatSession>? allSessions,
   }) {
     return ChatMessageReceived(
       messages: messages ?? this.messages,
       isTyping: isTyping ?? this.isTyping,
+      isGenerating: isGenerating ?? this.isGenerating,
       currentSessionId: currentSessionId ?? this.currentSessionId,
       allSessions: allSessions ?? this.allSessions,
     );

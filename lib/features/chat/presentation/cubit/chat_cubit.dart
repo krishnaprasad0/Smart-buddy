@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:uuid/uuid.dart';
@@ -23,6 +24,7 @@ class ChatCubit extends Cubit<ChatState> {
   // but still used by uploadDocument for temporary messages.
   // This might need refactoring if uploadDocument should also save to DB.
   final List<ChatMessage> _messages = [];
+  StreamSubscription<String>? _aiSubscription;
 
   ChatCubit({
     required this.aiService,
@@ -139,6 +141,7 @@ class ChatCubit extends Cubit<ChatState> {
       ChatMessageReceived(
         messages: updatedMessages,
         isTyping: true,
+        isGenerating: true,
         currentSessionId: _currentSessionId,
         allSessions: _allSessions,
       ),
@@ -187,7 +190,6 @@ class ChatCubit extends Cubit<ChatState> {
       String currentAiResponse = "";
       final aiMsgTimestamp = DateTime.now();
 
-      // Add an initial empty message for the AI to the UI state
       final aiPlaceholderMessage = ChatMessage(
         text: "",
         isAi: true,
@@ -200,69 +202,125 @@ class ChatCubit extends Cubit<ChatState> {
         ChatMessageReceived(
           messages: messagesWithAiPlaceholder,
           isTyping: true,
+          isGenerating: true,
           currentSessionId: _currentSessionId,
           allSessions: _allSessions,
         ),
       );
 
-      await for (final chunk in aiStream) {
-        currentAiResponse += chunk;
+      _aiSubscription = aiStream.listen(
+        (chunk) {
+          currentAiResponse += chunk;
+          messagesWithAiPlaceholder[messagesWithAiPlaceholder.length -
+              1] = ChatMessage(
+            text: currentAiResponse,
+            isAi: true,
+            timestamp: aiMsgTimestamp,
+          );
 
-        // Update the last message (the AI placeholder) with the new text
-        messagesWithAiPlaceholder[messagesWithAiPlaceholder.length -
-            1] = ChatMessage(
-          text: currentAiResponse,
-          isAi: true,
-          timestamp: aiMsgTimestamp,
-        );
-
-        emit(
-          ChatMessageReceived(
-            messages: List.from(messagesWithAiPlaceholder), // Emit a copy
-            isTyping: currentAiResponse.isEmpty,
-            currentSessionId: _currentSessionId,
-            allSessions: _allSessions,
-          ),
-        );
-      }
-
-      stopwatch.stop();
-      // Final update with metrics
-      final tokenCount = (currentAiResponse.length / 4).round();
-
-      final aiMessage = ChatMessage(
-        text: currentAiResponse,
-        isAi: true,
-        timestamp: aiMsgTimestamp,
-        timeTaken: stopwatch.elapsed,
-        tokenCount: tokenCount,
-      );
-
-      await dbService.saveMessage(_currentSessionId!, aiMessage);
-
-      final finalMessages = List<ChatMessage>.from(updatedMessages)
-        ..add(aiMessage);
-
-      emit(
-        ChatMessageReceived(
-          messages: finalMessages,
-          isTyping: false,
-          currentSessionId: _currentSessionId,
-          allSessions: _allSessions,
-        ),
+          emit(
+            ChatMessageReceived(
+              messages: List.from(messagesWithAiPlaceholder),
+              isTyping: currentAiResponse.isEmpty,
+              isGenerating: true,
+              currentSessionId: _currentSessionId,
+              allSessions: _allSessions,
+            ),
+          );
+        },
+        onError: (e) {
+          log("ChatCubit: Stream Error: $e");
+          _handleFinish(
+            updatedMessages,
+            currentAiResponse,
+            aiMsgTimestamp,
+            stopwatch,
+          );
+        },
+        onDone: () {
+          _handleFinish(
+            updatedMessages,
+            currentAiResponse,
+            aiMsgTimestamp,
+            stopwatch,
+          );
+        },
+        cancelOnError: true,
       );
     } catch (e) {
       log("ChatCubit: Catching AI Error: $e");
-      await aiService.reset();
-      emit(ChatError("AI Error: $e"));
+      if (e.toString().contains("BUSY")) {
+        await aiService.reset();
+      }
+      emit(
+        ChatError(
+          "AI Error: ${e.toString().contains("BUSY") ? "Processor was busy. Resetting... Please try again." : e}",
+        ),
+      );
       emit(
         ChatMessageReceived(
-          messages: updatedMessages, // Use updatedMessages here
+          messages: updatedMessages,
           isTyping: false,
           currentSessionId: _currentSessionId,
           allSessions: _allSessions,
         ),
       );
+    }
+  }
+
+  Future<void> _handleFinish(
+    List<ChatMessage> updatedMessages,
+    String finalResponse,
+    DateTime timestamp,
+    Stopwatch stopwatch,
+  ) async {
+    stopwatch.stop();
+    final tokenCount = (finalResponse.length / 4).round();
+
+    final aiMessage = ChatMessage(
+      text: finalResponse,
+      isAi: true,
+      timestamp: timestamp,
+      timeTaken: stopwatch.elapsed,
+      tokenCount: tokenCount,
+    );
+
+    if (finalResponse.isNotEmpty) {
+      await dbService.saveMessage(_currentSessionId!, aiMessage);
+    }
+
+    final finalMessages = List<ChatMessage>.from(updatedMessages)
+      ..add(aiMessage);
+
+    emit(
+      ChatMessageReceived(
+        messages: finalMessages,
+        isTyping: false,
+        isGenerating: false,
+        currentSessionId: _currentSessionId,
+        allSessions: _allSessions,
+      ),
+    );
+    _aiSubscription = null;
+  }
+
+  Future<void> stopGeneration() async {
+    if (_aiSubscription != null) {
+      await _aiSubscription?.cancel();
+      _aiSubscription = null;
+
+      // Crucial: Await the reset to ensure the native inference engine is free
+      await aiService.reset();
+
+      // Emit state to stop UI loading indicator only AFTER reset is done
+      if (state is ChatMessageReceived) {
+        emit(
+          (state as ChatMessageReceived).copyWith(
+            isTyping: false,
+            isGenerating: false,
+          ),
+        );
+      }
     }
   }
 
