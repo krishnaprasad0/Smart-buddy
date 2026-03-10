@@ -9,7 +9,7 @@ import 'core/services/ai_service.dart';
 import 'core/services/local_storage_service.dart';
 import 'features/chat/data/repository/rag_repository_impl.dart';
 import 'features/chat/data/source/local_document_source.dart';
- 
+
 void main() {
   runApp(const SmartBuddyApp());
 }
@@ -43,7 +43,7 @@ class SmartBuddyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Smart Buddy - Offline AI',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.neonTheme,
+        theme: AppTheme.buddyTheme,
         home: const AppNavigationWrapper(),
       ),
     );
@@ -79,7 +79,7 @@ class _AppNavigationWrapperState extends State<AppNavigationWrapper> {
           },
           backgroundColor: Colors.transparent,
           elevation: 0,
-          selectedItemColor: AppTheme.neonCyan,
+          selectedItemColor: AppTheme.buddyTeal,
           unselectedItemColor: Colors.white30,
           showSelectedLabels: true,
           showUnselectedLabels: false,

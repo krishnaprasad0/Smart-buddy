@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'chat_state.dart';
 import '../../../../core/services/ai_service.dart';
@@ -64,10 +66,18 @@ class ChatCubit extends Cubit<ChatState> {
     emit(ChatMessageReceived(messages: List.from(_messages), isTyping: true));
 
     try {
-      // 0. Initialize AI Service if needed
+      // 0. Check if AI Service is available (initialized)
       final isAvailable = await aiService.isModelAvailable();
       if (!isAvailable) {
-        await aiService.initialize();
+        emit(
+          ChatError(
+            "Model not loaded. Please go to Neural Hub and LOAD the brain first!",
+          ),
+        );
+        emit(
+          ChatMessageReceived(messages: List.from(_messages), isTyping: false),
+        );
+        return;
       }
 
       // 1. Retrieve context from RAG Repository
@@ -75,12 +85,15 @@ class ChatCubit extends Cubit<ChatState> {
 
       // 2. Construct Augmented Prompt with Identity
       String systemPrompt =
-          "You are Smart Buddy, a helpful offline AI assistant. Keep your responses concise and short by default. If the user explicitly asks for a detailed explanation or more information, then provide a comprehensive response.";
+          "You are Smart Buddy, a friendly and helpful offline AI assistant. You can handle both general conversation and document-based questions. Keep your responses concise and natural by default.";
       String augmentedPrompt = "$systemPrompt\n\nUser Question: $text";
 
       if (context.isNotEmpty) {
         augmentedPrompt =
-            "$systemPrompt\n\nContext:\n$context\n\nQuestion: $text\n\nAnswer the question based on the context provided above.";
+            "$systemPrompt\n\nContext from documents:\n$context\n\n"
+            "Task: Answer the user's question. If the provided context contains relevant information, use it to give an accurate answer. "
+            "If the context is not relevant (e.g., the user is just saying hello or asking a general question), respond naturally as Smart Buddy without forcing the context into the answer.\n\n"
+            "User Question: $text";
       }
 
       // 3. Call AI Service
@@ -96,7 +109,6 @@ class ChatCubit extends Cubit<ChatState> {
       );
 
       await for (final chunk in aiStream) {
-        print("ChatCubit: Received chunk: $chunk");
         // MediaPipe 0.10.29 generateResponseAsync sends DELTAS (not cumulative)
         currentAiResponse += chunk;
 
@@ -117,11 +129,6 @@ class ChatCubit extends Cubit<ChatState> {
       }
 
       stopwatch.stop();
-
-      print(
-        "ChatCubit: AI stream completed. Total response length: ${currentAiResponse.length}",
-      );
-
       // Final update with metrics
       // Rough estimation: 1 token approx 4 chars
       final tokenCount = (currentAiResponse.length / 4).round();
@@ -138,7 +145,7 @@ class ChatCubit extends Cubit<ChatState> {
         ChatMessageReceived(messages: List.from(_messages), isTyping: false),
       );
     } catch (e) {
-      print("ChatCubit: Catching AI Error: $e");
+      log("ChatCubit: Catching AI Error: $e");
       await aiService.reset();
       emit(ChatError("AI Error: $e"));
       emit(

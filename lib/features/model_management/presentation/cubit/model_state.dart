@@ -13,12 +13,14 @@ class ModelLoading extends ModelState {}
 
 class ModelStatusReady extends ModelState {
   final bool isModelDownloaded;
+  final bool isModelLoaded;
   final String selectedModel;
   final double downloadProgress;
   final bool isDownloading;
 
   const ModelStatusReady({
     required this.isModelDownloaded,
+    this.isModelLoaded = false,
     required this.selectedModel,
     this.downloadProgress = 0.0,
     this.isDownloading = false,
@@ -26,12 +28,14 @@ class ModelStatusReady extends ModelState {
 
   ModelStatusReady copyWith({
     bool? isModelDownloaded,
+    bool? isModelLoaded,
     String? selectedModel,
     double? downloadProgress,
     bool? isDownloading,
   }) {
     return ModelStatusReady(
       isModelDownloaded: isModelDownloaded ?? this.isModelDownloaded,
+      isModelLoaded: isModelLoaded ?? this.isModelLoaded,
       selectedModel: selectedModel ?? this.selectedModel,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       isDownloading: isDownloading ?? this.isDownloading,
@@ -41,6 +45,7 @@ class ModelStatusReady extends ModelState {
   @override
   List<Object?> get props => [
     isModelDownloaded,
+    isModelLoaded,
     selectedModel,
     downloadProgress,
     isDownloading,

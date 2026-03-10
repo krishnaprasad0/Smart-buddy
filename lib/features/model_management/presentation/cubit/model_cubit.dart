@@ -21,14 +21,32 @@ class ModelCubit extends Cubit<ModelState> {
       final isDownloaded = await storageService.isModelDownloaded(
         _modelFileName,
       );
+      final isLoaded = isDownloaded && await aiService.isModelAvailable();
+
       emit(
         ModelStatusReady(
           isModelDownloaded: isDownloaded,
+          isModelLoaded: isLoaded,
           selectedModel: isDownloaded ? _defaultModelName : 'None',
         ),
       );
     } catch (e) {
       emit(ModelError("Error checking model status: ${e.toString()}"));
+    }
+  }
+
+  Future<void> loadModel() async {
+    if (state is! ModelStatusReady) return;
+    final currentState = state as ModelStatusReady;
+
+    if (currentState.isModelLoaded) return;
+
+    emit(ModelLoading());
+    try {
+      await aiService.initialize();
+      emit(currentState.copyWith(isModelLoaded: true));
+    } catch (e) {
+      emit(ModelError("Failed to load model: ${e.toString()}"));
     }
   }
 

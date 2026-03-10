@@ -23,7 +23,7 @@ class ModelPage extends StatelessWidget {
               title: Text(
                 'NEURAL HUB',
                 style: TextStyle(
-                  color: AppTheme.neonCyan,
+                  color: AppTheme.buddyTeal,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 2,
                 ),
@@ -68,7 +68,7 @@ class ModelPage extends StatelessWidget {
               if (state is ModelLoading) {
                 return const SliverFillRemaining(
                   child: Center(
-                    child: CircularProgressIndicator(color: AppTheme.neonCyan),
+                    child: CircularProgressIndicator(color: AppTheme.buddyTeal),
                   ),
                 );
               }
@@ -82,14 +82,19 @@ class ModelPage extends StatelessWidget {
                           'Optimal balance between speed and quality for document Q&A. Size: ~1.5GB',
                       icon: Icons.psychology,
                       isDownloaded: state.isModelDownloaded,
+                      isLoaded: state.isModelLoaded,
                       isSelected: state.selectedModel == 'Gemma 2B',
                       isDownloading: state.isDownloading,
                       progress: state.downloadProgress,
                       onAction: () {
-                        if (state.isModelDownloaded) {
+                        if (!state.isModelDownloaded) {
+                          if (!state.isDownloading) {
+                            context.read<ModelCubit>().downloadModel();
+                          }
+                        } else if (!state.isModelLoaded) {
+                          context.read<ModelCubit>().loadModel();
+                        } else {
                           context.read<ModelCubit>().selectModel('Gemma 2B');
-                        } else if (!state.isDownloading) {
-                          context.read<ModelCubit>().downloadModel();
                         }
                       },
                       onDelete: state.isModelDownloaded
@@ -103,6 +108,7 @@ class ModelPage extends StatelessWidget {
                           'Advanced reasoning and complex instructions. Requires more RAM. Size: ~4.5GB',
                       icon: Icons.auto_awesome,
                       isDownloaded: false,
+                      isLoaded: false,
                       isSelected: state.selectedModel == 'Llama 3 8B',
                       isDownloading: false,
                       isAvailable: false,
@@ -115,6 +121,7 @@ class ModelPage extends StatelessWidget {
                           'High performance for creative tasks. Size: ~4.1GB',
                       icon: Icons.bubble_chart,
                       isDownloaded: false,
+                      isLoaded: false,
                       isSelected: state.selectedModel == 'Mistral 7B',
                       isDownloading: false,
                       isAvailable: false,
@@ -200,6 +207,7 @@ class _ModelCard extends StatelessWidget {
   final String description;
   final IconData icon;
   final bool isDownloaded;
+  final bool isLoaded;
   final bool isSelected;
   final bool isDownloading;
   final double progress;
@@ -212,6 +220,7 @@ class _ModelCard extends StatelessWidget {
     required this.description,
     required this.icon,
     required this.isDownloaded,
+    required this.isLoaded,
     required this.isSelected,
     this.isDownloading = false,
     this.progress = 0.0,
@@ -237,17 +246,9 @@ class _ModelCard extends StatelessWidget {
               ],
             ),
             border: Border.all(
-              color: isSelected ? AppTheme.neonCyan : Colors.white10,
+              color: isSelected ? AppTheme.buddyTeal : Colors.white10,
               width: 1,
             ),
-            boxShadow: [
-              if (isSelected)
-                BoxShadow(
-                  color: AppTheme.neonCyan.withOpacity(0.05),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
@@ -264,14 +265,14 @@ class _ModelCard extends StatelessWidget {
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? AppTheme.neonCyan.withOpacity(0.1)
+                                ? AppTheme.buddyTeal.withOpacity(0.1)
                                 : Colors.white.withOpacity(0.05),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Icon(
                             icon,
                             color: isSelected
-                                ? AppTheme.neonCyan
+                                ? AppTheme.buddyTeal
                                 : Colors.white60,
                             size: 28,
                           ),
@@ -301,10 +302,16 @@ class _ModelCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        if (isDownloaded)
+                        if (isLoaded)
                           const Icon(
-                            Icons.verified,
-                            color: AppTheme.neonCyan,
+                            Icons.bolt,
+                            color: AppTheme.buddyTeal,
+                            size: 24,
+                          )
+                        else if (isDownloaded)
+                          const Icon(
+                            Icons.download_done,
+                            color: Colors.white30,
                             size: 24,
                           )
                         else if (isDownloading)
@@ -314,7 +321,7 @@ class _ModelCard extends StatelessWidget {
                             child: CircularProgressIndicator(
                               value: progress,
                               strokeWidth: 3,
-                              color: AppTheme.neonCyan,
+                              color: AppTheme.buddyTeal,
                               backgroundColor: Colors.white10,
                             ),
                           ),
@@ -339,10 +346,10 @@ class _ModelCard extends StatelessWidget {
                                 : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: isSelected
-                                  ? AppTheme.neonCyan
+                                  ? AppTheme.buddyTeal
                                   : isDownloaded
                                   ? Colors.white10
-                                  : AppTheme.neonPurple,
+                                  : AppTheme.buddyGreen,
                               foregroundColor: isSelected
                                   ? Colors.black
                                   : Colors.white,
@@ -355,11 +362,11 @@ class _ModelCard extends StatelessWidget {
                             child: Text(
                               isDownloading
                                   ? 'Downloading ${(progress * 100).toInt()}%'
-                                  : isSelected
-                                  ? 'Active'
-                                  : isDownloaded
-                                  ? 'Select Brain'
-                                  : 'Download Brain',
+                                  : !isDownloaded
+                                  ? 'Download Brain'
+                                  : !isLoaded
+                                  ? 'Load Brain'
+                                  : 'Active',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
