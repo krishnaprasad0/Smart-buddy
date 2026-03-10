@@ -33,7 +33,6 @@ class ChatInput extends StatelessWidget {
     return BlocBuilder<ChatCubit, ChatState>(
       builder: (context, state) {
         final isGenerating = state is ChatMessageReceived && state.isGenerating;
-        final isTyping = state is ChatMessageReceived && state.isTyping;
 
         return Container(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),

@@ -4,6 +4,9 @@ import '../../../../core/theme/app_theme.dart';
 import '../cubit/chat_cubit.dart';
 import '../cubit/chat_state.dart';
 import '../../domain/model/chat_session.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'drawer_header_widget.dart';
+import 'drawer_session_item.dart';
 
 class ChatDrawer extends StatelessWidget {
   const ChatDrawer({super.key});
@@ -15,102 +18,129 @@ class ChatDrawer extends StatelessWidget {
         return Drawer(
           backgroundColor: AppTheme.surfaceColor,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const DrawerHeader(
-                child: Center(
-                  child: Text(
-                    'Smart Buddy',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              // Standalone Header Widget
+              const DrawerHeaderWidget(),
+
+              // New Chat Action Button
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.buddyTeal, AppTheme.buddyGreenLight],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.buddyTeal.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () {
+                        context.read<ChatCubit>().createNewChat();
+                        Navigator.pop(context);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.add_rounded, color: Colors.white),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'New Chat',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              ListTile(
-                leading: const Icon(
-                  Icons.add_comment_rounded,
-                  color: AppTheme.buddyTeal,
-                ),
-                title: const Text(
-                  'New Chat',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                onTap: () {
-                  context.read<ChatCubit>().createNewChat();
-                  Navigator.pop(context);
-                },
-              ),
-              const Divider(color: Colors.white10),
+
               const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Text(
-                  'Previous Chats',
+                  'RECENT CHATS',
                   style: TextStyle(
                     color: Colors.white30,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
+
+              // Chat History List using Standalone Item Widget
               Expanded(
                 child: state is ChatMessageReceived
                     ? ListView.builder(
-                        padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
                         itemCount: state.allSessions.length,
                         itemBuilder: (context, index) {
                           final session = state.allSessions[index];
                           final isSelected =
                               session.id == state.currentSessionId;
 
-                          return ListTile(
-                            leading: Icon(
-                              Icons.chat_bubble_outline_rounded,
-                              color: isSelected
-                                  ? AppTheme.buddyTeal
-                                  : Colors.white24,
-                              size: 20,
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: DrawerSessionItem(
+                              session: session,
+                              isSelected: isSelected,
+                              onTap: () {
+                                context.read<ChatCubit>().loadChatSession(
+                                  session.id,
+                                );
+                                Navigator.pop(context);
+                              },
+                              onDelete: () =>
+                                  _showDeleteDialog(context, session),
                             ),
-                            title: Text(
-                              session.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.white60,
-                                fontSize: 14,
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            trailing: isSelected
-                                ? null
-                                : IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                      size: 18,
-                                      color: Colors.white24,
-                                    ),
-                                    onPressed: () =>
-                                        _showDeleteDialog(context, session),
-                                  ),
-                            onTap: () {
-                              context.read<ChatCubit>().loadChatSession(
-                                session.id,
-                              );
-                              Navigator.pop(context);
-                            },
                           );
                         },
                       )
                     : const Center(child: CircularProgressIndicator()),
               ),
-              const Divider(color: Colors.white10),
-              const Spacer(),
+
+              const Divider(color: Colors.white10, height: 1),
+
+              // Dynamic Version Footer
               Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Smart Buddy v1.0',
-                  style: TextStyle(color: Colors.white10, fontSize: 10),
+                padding: const EdgeInsets.all(24.0),
+                child: FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    final version = snapshot.hasData
+                        ? 'V${snapshot.data!.version}'
+                        : 'V1.0.0';
+                    return Center(
+                      child: Text(
+                        'Smart Buddy $version',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.1),
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
