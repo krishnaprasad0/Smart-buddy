@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:animate_do/animate_do.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/chat_cubit.dart';
 import '../cubit/chat_state.dart';
@@ -13,11 +12,6 @@ class ChatDrawer extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<ChatCubit, ChatState>(
       builder: (context, state) {
-        final indexedDocs = context
-            .read<ChatCubit>()
-            .ragRepository
-            .getIndexedDocuments();
-
         return Drawer(
           backgroundColor: AppTheme.surfaceColor,
           child: Column(
@@ -111,75 +105,12 @@ class ChatDrawer extends StatelessWidget {
                     : const Center(child: CircularProgressIndicator()),
               ),
               const Divider(color: Colors.white10),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Text(
-                  'Knowledge Assets',
-                  style: TextStyle(
-                    color: Colors.white30,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 200,
-                child: indexedDocs.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No documents uploaded',
-                          style: TextStyle(color: Colors.white30, fontSize: 12),
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: indexedDocs.length,
-                        itemBuilder: (context, index) {
-                          final doc = indexedDocs[index];
-                          return FadeInLeft(
-                            delay: Duration(milliseconds: index * 100),
-                            child: ListTile(
-                              dense: true,
-                              leading: const Icon(
-                                Icons.description_rounded,
-                                color: AppTheme.buddyTeal,
-                                size: 20,
-                              ),
-                              title: Text(
-                                doc.name,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                '${doc.chunks.length} segments',
-                                style: TextStyle(
-                                  color: Colors.white24,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
+              const Spacer(),
               Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton.icon(
-                  onPressed: () => context.read<ChatCubit>().uploadDocument(),
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: const Text('Add Document'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.buddyGreen,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 45),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                child: Text(
+                  'Smart Buddy v1.0',
+                  style: TextStyle(color: Colors.white10, fontSize: 10),
                 ),
               ),
             ],

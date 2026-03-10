@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../cubit/chat_cubit.dart';
+import 'knowledge_base_bottom_sheet.dart';
 
 class ChatInput extends StatelessWidget {
   final TextEditingController _controller = TextEditingController();
@@ -17,6 +18,15 @@ class ChatInput extends StatelessWidget {
     }
   }
 
+  void _showKnowledgeBase(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const KnowledgeBaseBottomSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -27,6 +37,12 @@ class ChatInput extends StatelessWidget {
       ),
       child: Row(
         children: [
+          IconButton(
+            icon: const Icon(Icons.attach_file_rounded, color: Colors.white54),
+            onPressed: () => _showKnowledgeBase(context),
+            tooltip: 'Knowledge Base',
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextField(
               controller: _controller,

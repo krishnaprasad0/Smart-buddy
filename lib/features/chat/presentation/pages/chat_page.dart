@@ -38,6 +38,11 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       backgroundColor: AppTheme.chatBg,
       drawer: const ChatDrawer(),
+      onDrawerChanged: (isOpened) {
+        if (isOpened) {
+          FocusScope.of(context).unfocus();
+        }
+      },
       appBar: AppBar(
         title: const Text('Smart Buddy'),
         backgroundColor: AppTheme.surfaceColor,
